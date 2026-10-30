@@ -54,7 +54,7 @@ Measured facts per harness (source: live panes and stores on this machine):
 | `ccsession.py` | `AgentSession(cwd, harness=...)` (start/send/events/busy/ready); `ClaudeSession` shim |
 | `server.py` | aiohttp WebSocket server, hubs keyed by session name, per-hub harness |
 | `capture.py` | PTY capture instrument for any harness (raw bytes + marker report) |
-| `analyze.py` | ANSI stripper / transcript derivation for raw captures |
+| `analyze.py` | raw-capture derivation: `--view strip` drops ANSI/control chars; `--view text` also drops TUI chrome lines (rules, bars, prompt, spinner, status) and keeps the last `\r` rewrite per line |
 | `wstest.py` | CLI WebSocket client |
 
 ## Run
@@ -63,6 +63,7 @@ Measured facts per harness (source: live panes and stores on this machine):
 python3 server.py --host 127.0.0.1 --port 8787          # http://127.0.0.1:8787/?harness=codex
 python3 ccsession.py --harness codex --cwd DIR "prompt"
 python3 capture.py --harness freebuff --seq '["hi"]' --out runs/fb.raw --dump-markers
+python3 analyze.py runs/r1.raw --view text --tail 40
 ```
 
 `/ws` query params: `session` (named hub, reconnectable), `harness` (claude|codex|freebuff,

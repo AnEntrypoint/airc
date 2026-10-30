@@ -1,65 +1,60 @@
 #!/usr/bin/env python3
-"""Strip ANSI from a raw PTY capture and derive a readable transcript.
-
-Two views:
-  strip  - ANSI removed, control chars collapsed, everything else kept
-  text   - 'strip' with TUI chrome removed (borders, prompt glyph, status bar)
-
-Usage: python3 analyze.py runs/r1.raw [--view strip|text|both] [--tail N]
-"""
 import argparse
 import re
 import sys
-import unicodedata
 
-# ESC [ ... final-byte  (CSI)
 CSI = re.compile(r"\x1b\[[0-9;:?<=>]*[ -/]*[@-~]")
-# ESC ] ... (BEL | ST)  (OSC)
 OSC = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
-# ESC P ... ST (DCS) ; ESC _ ... ST (APC) ; ESC ^ ... ST (PM)
-STR = re.compile(r"\x1b[P_^][^\x1b]*(?:\x1b\\)?")
-# lone ESC + one char
-ESC1 = re.compile(r"\x1b[@-Z\\-_]")
-# other C0 controls except \n \r \t
-CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+DCS_APC_PM = re.compile(r"\x1b[P_^][^\x1b]*(?:\x1b\\)?")
+ESC_SINGLE_CHAR = re.compile(r"\x1b[@-Z\\-_]")
+C0_CONTROLS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def strip_ansi(b: bytes) -> str:
     s = b.decode("utf-8", "replace")
     s = OSC.sub("", s)
-    s = STR.sub("", s)
+    s = DCS_APC_PM.sub("", s)
     s = CSI.sub("", s)
-    s = ESC1.sub("", s)
-    s = CTRL.sub("", s)
+    s = ESC_SINGLE_CHAR.sub("", s)
+    s = C0_CONTROLS.sub("", s)
     return s
 
 
-# Lines that are pure TUI chrome rather than agent output.
-CHROME = [
-    re.compile(r"^\s*[─═━╌┄┈\-—_]{3,}\s*$"),          # rules / separators
-    re.compile(r"^\s*[▁▂▃▅▇█▉▊▋▌▍▎▏]+\s*$"),              # bars
-    re.compile(r"^\s*❯?\s*$"),                          # bare prompt
-    re.compile(r"^\s*⏵⏵\s"),                             # mode chrome
-    re.compile(r"^\s*(✻|✽|✢|✳|✶|·|\*)\s"),               # spinner
-    re.compile(r"^\s*esc to interrupt"),
-    re.compile(r"^\s*\? for shortcuts"),
-    re.compile(r"^\s*(Claude Code v|/workspace|hf:|claude-)"),
-    re.compile(r"^\s*tokens?\b"),
-    re.compile(r"^\s*[0-9]+m? ?[0-9]*s?\s*$"),
-]
+HORIZONTAL_RULE = re.compile(r"^\s*[─═━╌┄┈\-—_]{3,}\s*$")
+BAR_GLYPHS = re.compile(r"^\s*[▁▂▃▅▇█▉▊▋▌▍▎▏]+\s*$")
+EMPTY_PROMPT = re.compile(r"^\s*❯?\s*$")
+MODE_INDICATOR = re.compile(r"^\s*⏵⏵\s")
+SPINNER_GLYPHS = re.compile(r"^\s*(✻|✽|✢|✳|✶|·|\*)\s")
+INTERRUPT_HINT = re.compile(r"^\s*esc to interrupt")
+SHORTCUTS_HINT = re.compile(r"^\s*\? for shortcuts")
+CLAUDE_BANNER = re.compile(r"^\s*(Claude Code v|/workspace|hf:|claude-)")
+TOKEN_COUNTER = re.compile(r"^\s*tokens?\b")
+ELAPSED_TIME = re.compile(r"^\s*[0-9]+m? ?[0-9]*s?\s*$")
+
+CHROME_PATTERNS = (
+    HORIZONTAL_RULE,
+    BAR_GLYPHS,
+    EMPTY_PROMPT,
+    MODE_INDICATOR,
+    SPINNER_GLYPHS,
+    INTERRUPT_HINT,
+    SHORTCUTS_HINT,
+    CLAUDE_BANNER,
+    TOKEN_COUNTER,
+    ELAPSED_TIME,
+)
 
 
 def looks_chrome(line: str) -> bool:
-    return any(p.search(line) for p in CHROME)
+    return any(p.search(line) for p in CHROME_PATTERNS)
+
+
+def last_terminal_rewrite(raw_line: str) -> str:
+    return raw_line.split("\r")[-1]
 
 
 def to_text(stripped: str) -> str:
-    # The TUI uses \r to rewrite a line in place; keep the last write.
-    lines = []
-    for raw_line in stripped.split("\n"):
-        parts = raw_line.split("\r")
-        line = parts[-1] if len(parts) > 1 else parts[0]
-        lines.append(line.rstrip())
+    lines = [last_terminal_rewrite(raw_line).rstrip() for raw_line in stripped.split("\n")]
     out = []
     prev_blank = False
     for line in lines:
