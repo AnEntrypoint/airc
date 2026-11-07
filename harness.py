@@ -129,6 +129,12 @@ class Harness:
     def continue_args(self) -> tuple[str, ...]:
         raise NotImplementedError(self.name)
 
+    def fork_args(self, session_id: str) -> tuple[str, ...]:
+        raise NotImplementedError(self.name)
+
+    def fork_continue_args(self) -> tuple[str, ...]:
+        raise NotImplementedError(self.name)
+
     def env(self, base: dict) -> dict:
         env = dict(base)
         for key in self.env_strip:

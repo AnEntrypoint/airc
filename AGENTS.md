@@ -76,7 +76,7 @@ python3 analyze.py runs/r1.raw --view text --tail 40
 
 `/ws` query params: `session` (named hub, reconnectable), `harness` (claude|codex|freebuff,
 fixed at hub creation), `cwd` (new hub only), `mode=plain|tagged`, `kinds=text,tool`,
-`resume=<session-id>`, `continue=1`.
+`resume=<session-id>`, `continue=1`, `fork=1`.
 `GET /sessions` lists live hubs with their harness and launch args.
 
 ## Resume
@@ -87,8 +87,11 @@ harness launches in its own resume form (`claude --resume <id>`, `codex resume <
 `freebuff --continue <id>`). The resumed channel binds to exactly that session and
 starts at the store's end (`Channel.at_end`), so a client receives only events from
 after the resume instead of the saved conversation. Freebuff's JSON channel seeds
-the old message ids for the same reason. A client that asks for different launch args
-on an existing hub is refused; stop the hub first.
+the old message ids for the same reason. `fork=1` asks the mod for `fork_args` /
+`fork_continue_args` (`claude --fork-session`, `codex fork`); the new session id is
+unknown at launch, so the channel binds the newest store created after the start. A
+client that asks for different launch args on an existing hub is refused; stop the
+hub first.
 
 ## Constraints
 

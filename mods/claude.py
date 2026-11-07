@@ -149,5 +149,11 @@ class Claude(Harness):
     def continue_args(self) -> tuple[str, ...]:
         return ("--continue",)
 
+    def fork_args(self, session_id: str) -> tuple[str, ...]:
+        return self.resume_args(session_id) + ("--fork-session",)
+
+    def fork_continue_args(self) -> tuple[str, ...]:
+        return ("--continue", "--fork-session")
+
 
 MOD = Claude()

@@ -72,6 +72,7 @@ spaces), and there is no scrollback. So the TUI is a bad output channel.
 | `kinds=text,tool` | classes a new session captures (default `text,tool`) |
 | `resume=<session-id>` | new hub only: resume that conversation (`claude --resume <id>`, `codex resume <id>`, `freebuff --continue <id>`) |
 | `continue=1` | new hub only: continue the harness's latest conversation (`claude --continue`, `codex resume --last`, `freebuff --continue`) |
+| `fork=1` | with `resume` or `continue`: fork into a new session id (`claude --fork-session`, `codex fork`) |
 
 `GET /sessions` lists live hubs with their harness and launch args; `GET /` is a minimal browser client.
 A resumed hub binds to the requested session and reads its store from the end, so it does not

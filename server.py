@@ -139,18 +139,28 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
 
     resume_id = request.query.get("resume") or ""
     continue_last = request.query.get("continue", "").lower() in TRUE
+    fork = request.query.get("fork", "").lower() in TRUE
     launch_args: tuple[str, ...] = ()
     if resume_id and continue_last:
         await ws.send_str("resume and continue are mutually exclusive")
         await ws.close()
         return ws
+    if fork and not (resume_id or continue_last):
+        await ws.send_str("fork needs resume or continue")
+        await ws.close()
+        return ws
     if resume_id or continue_last:
         adapter = mods.load(harness)
         try:
-            launch_args = (adapter.continue_args() if continue_last
-                           else adapter.resume_args(resume_id))
+            if fork:
+                launch_args = (adapter.fork_continue_args() if continue_last
+                               else adapter.fork_args(resume_id))
+            else:
+                launch_args = (adapter.continue_args() if continue_last
+                               else adapter.resume_args(resume_id))
         except (NotImplementedError, ValueError) as exc:
-            await ws.send_str(f"harness {harness!r} cannot resume: {exc}")
+            action = "fork" if fork else "resume"
+            await ws.send_str(f"harness {harness!r} cannot {action}: {exc}")
             await ws.close()
             return ws
 
@@ -165,7 +175,7 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
         return ws
     if hub is None:
         hub = Hub(name, cwd, harness, kinds, launch_args,
-                  resume_id if launch_args and resume_id else None)
+                  resume_id if launch_args and resume_id and not fork else None)
         HUBS[name] = hub
         await hub.start()
     hub.clients.add(ws)
