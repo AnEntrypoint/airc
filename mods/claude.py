@@ -140,9 +140,19 @@ class ClaudeChannel(Channel):
                     yield {"kind": "result", "text": str(content)[:4000]}
 
 
+def launch_argv() -> tuple[str, ...]:
+    argv = ["claude"]
+    if os.environ.get("AIRC_CLAUDE_SKIP_PERMISSIONS") == "1":
+        argv.append("--dangerously-skip-permissions")
+    model = os.environ.get("AIRC_CLAUDE_MODEL")
+    if model:
+        argv += ["--model", model]
+    return tuple(argv)
+
+
 class Claude(Harness):
     name = "claude"
-    argv = ("claude", "--dangerously-skip-permissions") if os.environ.get("AIRC_CLAUDE_SKIP_PERMISSIONS") == "1" else ("claude",)
+    argv = launch_argv()
     env_strip = NESTING_VARS
 
     def pane_busy(self, pane: str) -> bool:
