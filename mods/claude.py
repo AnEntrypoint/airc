@@ -63,6 +63,10 @@ class ClaudeChannel(Channel):
         ordered: dict[str, dict[int, str]] = {}
         for record in self._tail_records():
             rtype = record.get("type")
+            if rtype == "system":
+                if record.get("subtype") == "turn_duration":
+                    yield {"kind": "turn_end"}
+                continue
             if rtype not in CONTENT_TYPES:
                 continue
             message = record.get("message") or {}
@@ -96,10 +100,6 @@ class ClaudeChannel(Channel):
                     if isinstance(content, list):
                         content = "".join(x.get("text", "") for x in content if isinstance(x, dict))
                     yield {"kind": "result", "text": str(content)[:4000]}
-            stop = message.get("stop_reason")
-            has_tool = any(isinstance(b, dict) and b.get("type") == "tool_use" for b in blocks)
-            if rtype == "assistant" and stop in ("end_turn", "stop_sequence", "max_tokens") and not has_tool:
-                yield {"kind": "turn_end"}
 
 
 class Claude(Harness):

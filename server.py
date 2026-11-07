@@ -129,6 +129,10 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     kinds = tuple(k for k in request.query.get("kinds", "text,tool").split(",") if k)
 
     hub = HUBS.get(name)
+    if hub is not None and not hub.alive:
+        await hub.stop()
+        HUBS.pop(name, None)
+        hub = None
     if hub is None:
         hub = Hub(name, cwd, harness, kinds)
         HUBS[name] = hub
@@ -189,10 +193,25 @@ async def index(_):
     return web.Response(text=INDEX, content_type="text/html")
 
 
+def describe(hub: "Hub") -> dict:
+    pane = hub.sess.pane()
+    lines = [line.rstrip() for line in pane.splitlines() if line.strip()]
+    return {"clients": len(hub.clients), "alive": hub.alive, "harness": hub.harness,
+            "cwd": hub.cwd, "busy": hub.sess.harness.pane_busy(pane), "pane_tail": lines[-12:]}
+
+
 async def sessions(_):
     return web.json_response({
-        name: {"clients": len(hub.clients), "alive": hub.alive, "harness": hub.harness, "cwd": hub.cwd}
-        for name, hub in HUBS.items()})
+        name: await asyncio.to_thread(describe, hub) for name, hub in HUBS.items()})
+
+
+async def delete_session(request: web.Request):
+    name = request.match_info["name"]
+    hub = HUBS.pop(name, None)
+    if hub is None:
+        return web.json_response({"ok": False, "error": f"unknown session {name}"}, status=404)
+    await hub.stop()
+    return web.json_response({"ok": True, "session": name})
 
 
 async def shutdown(app):
@@ -219,6 +238,7 @@ def main():
     app.router.add_get("/", index)
     app.router.add_get("/ws", ws_handler)
     app.router.add_get("/sessions", sessions)
+    app.router.add_delete("/sessions/{name}", delete_session)
     app.on_shutdown.append(shutdown)
     app.on_startup.append(start_reaper)
     app.on_cleanup.append(stop_reaper)
