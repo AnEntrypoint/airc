@@ -17,21 +17,23 @@ HUBS: Dict[str, "Hub"] = {}
 DEFAULT_CWD = os.path.abspath(os.environ.get("CCBRIDGE_CWD", "/workspace/airc/.ccbridge/scratch"))
 IDLE_REAP_SECONDS = float(os.environ.get("CCBRIDGE_IDLE_REAP", "1800"))
 TAG = {"text": "t", "thinking": "k", "tool": "u", "result": "r", "you": "y"}
-SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$")
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 TRUE = ("1", "true", "yes", "on")
 
 
 class Hub:
     def __init__(self, name: str, cwd: str, harness: str, kinds=("text", "tool"),
-                 launch_args: tuple[str, ...] = ()):
+                 launch_args: tuple[str, ...] = (), session_id: str | None = None):
         self.name = name
         self.cwd = cwd
         self.harness = harness
         self.kinds = kinds
         self.launch_args = tuple(launch_args)
+        self.session_id = session_id
         self.sess = C.AgentSession(cwd, harness=harness, name=f"ccb-{name}",
                                    launch_args=self.launch_args,
-                                   at_end=bool(self.launch_args))
+                                   at_end=bool(self.launch_args),
+                                   session_id=session_id)
         self.clients: Set[web.WebSocketResponse] = set()
         self.modes: Dict[web.WebSocketResponse, str] = {}
         self.queue: list[str] = []
@@ -162,7 +164,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
         await ws.close()
         return ws
     if hub is None:
-        hub = Hub(name, cwd, harness, kinds, launch_args)
+        hub = Hub(name, cwd, harness, kinds, launch_args,
+                  resume_id if launch_args and resume_id else None)
         HUBS[name] = hub
         await hub.start()
     hub.clients.add(ws)

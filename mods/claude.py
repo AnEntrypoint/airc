@@ -46,8 +46,9 @@ def sessions(cwd: str) -> list[dict]:
 
 
 class ClaudeChannel(Channel):
-    def __init__(self, cwd: str, since: float, at_end: bool = False):
-        super().__init__(cwd, since, at_end)
+    def __init__(self, cwd: str, since: float, at_end: bool = False,
+                 session_id: str | None = None):
+        super().__init__(cwd, since, at_end, session_id)
         self.project = project_dir(self.cwd)
 
     def candidates(self) -> list[str]:
@@ -67,6 +68,9 @@ class ClaudeChannel(Channel):
         return [p for _, p in sorted((os.stat(p).st_mtime, p) for p in seen if os.path.exists(p))]
 
     def bind(self) -> bool:
+        if self.session_id:
+            target = os.path.join(self.project, f"{self.session_id}.jsonl")
+            return self._bind(target) if os.path.exists(target) else False
         for path in reversed(self.candidates()):
             newest = self.newest([path], self.since)
             if newest:
@@ -130,8 +134,12 @@ class Claude(Harness):
     def pane_ready(self, pane: str) -> bool:
         return PROMPT_GLYPH in pane or BUSY_MARKER in pane or TITLE_MARKER in pane
 
-    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
-        return ClaudeChannel(cwd, since, at_end)
+    def channel(self, cwd: str, since: float, at_end: bool = False,
+                session_id: str | None = None) -> Channel:
+        return ClaudeChannel(cwd, since, at_end, session_id)
+
+    def sessions(self, cwd: str) -> list[dict]:
+        return sessions(cwd)
 
     def resume_args(self, session_id: str) -> tuple[str, ...]:
         if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$", session_id):

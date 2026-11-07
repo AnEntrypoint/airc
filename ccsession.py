@@ -13,11 +13,12 @@ from harness import tmux
 class AgentSession:
     def __init__(self, cwd: str, harness: str = mods.DEFAULT, name: str | None = None,
                  cols: int = 200, rows: int = 50, launch_args: tuple[str, ...] = (),
-                 at_end: bool = False):
+                 at_end: bool = False, session_id: str | None = None):
         self.cwd = os.path.abspath(cwd)
         self.harness = mods.load(harness)
         self.launch_args = tuple(launch_args)
         self.at_end = at_end
+        self.session_id = session_id
         self.name = name or f"ccb-{os.getpid()}-{int(time.time() * 1000) % 10_000_000}"
         self.cols, self.rows = cols, rows
         self.start_time = time.time()
@@ -69,7 +70,8 @@ class AgentSession:
 
     def events(self, kinds=("text",)):
         if self.channel is None:
-            self.channel = self.harness.channel(self.cwd, self.start_time, self.at_end)
+            self.channel = self.harness.channel(self.cwd, self.start_time, self.at_end,
+                                                self.session_id)
             self.channel.pane = self.pane
         yield from self.channel.poll(kinds)
 

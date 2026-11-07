@@ -70,11 +70,12 @@ spaces), and there is no scrollback. So the TUI is a bad output channel.
 | `mode=plain` (default) | frames are the agent's text verbatim; empty frame = turn end |
 | `mode=tagged` | frames are `<c>:<payload>`: `t` text, `k` thinking, `u` tool use, `r` result, `y` you, `e` turn end |
 | `kinds=text,tool` | classes a new session captures (default `text,tool`) |
-| `resume=<session-id>` | new hub only: launch the harness resuming that conversation (`claude --resume <id>`) |
-| `continue=1` | new hub only: launch the harness continuing its latest conversation (`claude --continue`) |
+| `resume=<session-id>` | new hub only: resume that conversation (`claude --resume <id>`, `codex resume <id>`, `freebuff --continue <id>`) |
+| `continue=1` | new hub only: continue the harness's latest conversation (`claude --continue`, `codex resume --last`, `freebuff --continue`) |
 
 `GET /sessions` lists live hubs with their harness and launch args; `GET /` is a minimal browser client.
-A resumed hub reads its transcript from the end, so it does not replay the saved conversation.
+A resumed hub binds to the requested session and reads its store from the end, so it does not
+replay the saved conversation (freebuff is seeded with the old message ids).
 
 ## Constraints this respects
 

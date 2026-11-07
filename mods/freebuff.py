@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 
 from harness import Channel, Harness
 
@@ -11,17 +12,82 @@ PROMPT_MARKER = "Enter a coding task"
 READY_MARKER = "for history " + "\u00b7" + " ? for help"
 HOME = os.path.join(os.path.expanduser("~"), ".config", "manicode")
 NOTICE_MARKERS = ("Not enough hours", "Choose another model", "not available on this connection")
+SESSION_RE = re.compile(r"^[A-Za-z0-9][^/\x00]{0,254}$")
+
+
+def project_dir(cwd: str) -> str:
+    return os.path.join(os.environ.get("FREEBUFF_HOME") or HOME, "projects",
+                        os.path.basename(os.path.abspath(cwd)))
+
+
+def sessions(cwd: str) -> list[dict]:
+    rows = []
+    pattern = os.path.join(project_dir(cwd), "chats", "*", "chat-messages.json")
+    for path in glob.glob(pattern):
+        chat_id = os.path.basename(os.path.dirname(path))
+        if not SESSION_RE.match(chat_id):
+            continue
+        try:
+            stat = os.stat(path)
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        messages = data if isinstance(data, list) else data.get("messages", [])
+        if not isinstance(messages, list) or not messages:
+            continue
+        rows.append({"session_id": chat_id, "path": path,
+                     "mtime": stat.st_mtime, "size": stat.st_size})
+    return sorted(rows, key=lambda row: row["mtime"])
 
 
 class FreebuffChannel(Channel):
-    def __init__(self, cwd: str, since: float, at_end: bool = False):
-        super().__init__(cwd, since, at_end)
-        self.project = os.path.join(os.environ.get("FREEBUFF_HOME") or HOME, "projects",
-                                    os.path.basename(self.cwd))
+    def __init__(self, cwd: str, since: float, at_end: bool = False,
+                 session_id: str | None = None):
+        super().__init__(cwd, since, at_end, session_id)
+        self.project = project_dir(self.cwd)
 
     def newest_chat(self) -> str | None:
         pattern = os.path.join(self.project, "chats", "*", "chat-messages.json")
         return self.newest(glob.glob(pattern))
+
+    def chat_path(self) -> str | None:
+        if self.session_id:
+            path = os.path.join(self.project, "chats", self.session_id, "chat-messages.json")
+            return path if os.path.exists(path) else None
+        return self.newest_chat()
+
+    def messages(self, path: str) -> list:
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return []
+        messages = data if isinstance(data, list) else data.get("messages", [])
+        return messages if isinstance(messages, list) else []
+
+    def message_key(self, index: int, message: dict) -> str:
+        return str(message.get("id") or f"index-{index}")
+
+    def seed(self) -> None:
+        self.text_len = {}
+        self.done_ids = set()
+        for index, message in enumerate(self.messages(self.path)):
+            if not isinstance(message, dict):
+                continue
+            mid = self.message_key(index, message)
+            self.done_ids.add(mid)
+            if message.get("variant") != "ai":
+                continue
+            blocks = message.get("blocks") or []
+            said = "".join(b.get("content", "") for b in blocks
+                           if isinstance(b, dict) and b.get("type") == "text"
+                           and b.get("textType") != "reasoning")
+            thought = "".join(b.get("content", "") for b in blocks
+                              if isinstance(b, dict) and b.get("type") == "text"
+                              and b.get("textType") == "reasoning")
+            self.text_len[mid] = len(said)
+            self.text_len[mid + "#thinking"] = len(thought)
 
     def pane_notice(self, want):
         for line in self.pane().splitlines():
@@ -38,25 +104,23 @@ class FreebuffChannel(Channel):
             return
 
     def poll(self, kinds=("text", "tool")):
-        path = self.newest_chat()
+        path = self.chat_path()
         if not path:
             yield from self.pane_notice(set(kinds) | {"turn_end"})
             return
         if path != self.path:
             self._bind(path)
-            self.text_len = {}
-            self.done_ids = set()
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                data = json.load(f)
-        except (OSError, ValueError):
-            return
+            if self.at_end:
+                self.seed()
+            else:
+                self.text_len = {}
+                self.done_ids = set()
         want = set(kinds) | {"turn_end"}
-        messages = data if isinstance(data, list) else data.get("messages", [])
-        for message in messages:
+        messages = self.messages(path)
+        for index, message in enumerate(messages):
             if not isinstance(message, dict):
                 continue
-            mid = message.get("id") or str(len(self.done_ids))
+            mid = self.message_key(index, message)
             variant = message.get("variant")
             if variant == "user":
                 if mid not in self.done_ids and "you" in want:
@@ -99,8 +163,20 @@ class Freebuff(Harness):
     def pane_ready(self, pane: str) -> bool:
         return PROMPT_MARKER in pane or READY_MARKER in pane or BUSY_MARKER in pane
 
-    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
-        return FreebuffChannel(cwd, since, at_end)
+    def channel(self, cwd: str, since: float, at_end: bool = False,
+                session_id: str | None = None) -> Channel:
+        return FreebuffChannel(cwd, since, at_end, session_id)
+
+    def sessions(self, cwd: str) -> list[dict]:
+        return sessions(cwd)
+
+    def resume_args(self, session_id: str) -> tuple[str, ...]:
+        if not SESSION_RE.match(session_id):
+            raise ValueError(f"bad session id {session_id!r}")
+        return ("--continue", session_id)
+
+    def continue_args(self) -> tuple[str, ...]:
+        return ("--continue",)
 
 
 MOD = Freebuff()

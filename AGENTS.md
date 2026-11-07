@@ -27,7 +27,8 @@ A mod answers exactly four questions:
 | how to launch | `argv`, `env_strip`, `term` |
 | read the window | `pane_ready(pane)`, `pane_busy(pane)` |
 | type a prompt | `send(target, text)` (default: bracketed paste + Enter; `submit_delay` before Enter) |
-| clean output | `channel(cwd, since, at_end)` -> `Channel.poll(kinds)` yielding `text|thinking|tool|result|you|turn_end` |
+| clean output | `channel(cwd, since, at_end, session_id)` -> `Channel.poll(kinds)` yielding `text|thinking|tool|result|you|turn_end` |
+| list sessions | `sessions(cwd)` -> `[{session_id, path, mtime, size}]` |
 | resume | `resume_args(session_id)`, `continue_args()` |
 
 Measured facts per harness (source: live panes and stores on this machine):
@@ -40,8 +41,14 @@ Measured facts per harness (source: live panes and stores on this machine):
 
 - freebuff's config home is `~/.config/manicode` (the package is `freebuff`, the binary
   `~/.config/manicode/freebuff`). `projects/<name>` keys on the cwd's basename, not a slug.
-- codex's store is JSONL under `$CODEX_HOME` (default `~/.codex`); its SQLite files
-  (`state_*.sqlite`, `queue_*.sqlite`) are internal.
+- codex's transcript is JSONL under `$CODEX_HOME` (default `~/.codex`); `state_*.sqlite`
+  table `threads` is the session index (`id`, `cwd`, `updated_at_ms`, `archived`),
+  read only to list resumable sessions. `queue_*.sqlite` stays internal.
+- Resume forms: `claude --resume <id>` / `claude --continue`; `codex resume <id>` /
+  `codex resume --last`; `freebuff --continue <id>` / `freebuff --continue`.
+- Freebuff's chat store is `~/.config/manicode/projects/<basename(cwd)>/chats/<id>/`;
+  `<id>` is the directory name and is what `--continue` takes. Its JSON transcript
+  is seeded with the existing message ids when resumed so old turns are not replayed.
 - Adding a harness: create `mods/<name>.py` exposing a `Harness` instance as `MOD`,
   register it in `mods/__init__.py`, and measure its four facts with
   `python3 capture.py --harness <name> --seq '["hi"]' --out runs/<name>.raw --dump-markers`.
@@ -75,11 +82,13 @@ fixed at hub creation), `cwd` (new hub only), `mode=plain|tagged`, `kinds=text,t
 ## Resume
 
 `resume` and `continue` are new-hub launch variants, fixed at hub creation like
-`harness` and `cwd`. They ask the mod for `resume_args` / `continue_args`, so Claude
-launches as `claude --resume <id>` or `claude --continue`. A resumed hub's channel
-starts at the transcript's end (`Channel.at_end`), so a client receives only events
-from after the resume instead of the saved conversation. A client that asks for
-different launch args on an existing hub is refused; stop the hub first.
+`harness` and `cwd`. They ask the mod for `resume_args` / `continue_args`, so the
+harness launches in its own resume form (`claude --resume <id>`, `codex resume <id>`,
+`freebuff --continue <id>`). The resumed channel binds to exactly that session and
+starts at the store's end (`Channel.at_end`), so a client receives only events from
+after the resume instead of the saved conversation. Freebuff's JSON channel seeds
+the old message ids for the same reason. A client that asks for different launch args
+on an existing hub is refused; stop the hub first.
 
 ## Constraints
 

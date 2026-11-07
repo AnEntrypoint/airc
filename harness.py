@@ -17,10 +17,12 @@ def tmux(*args: str) -> "subprocess.CompletedProcess":
 
 
 class Channel:
-    def __init__(self, cwd: str, since: float, at_end: bool = False):
+    def __init__(self, cwd: str, since: float, at_end: bool = False,
+                 session_id: str | None = None):
         self.cwd = os.path.abspath(cwd)
         self.since = since
         self.at_end = at_end
+        self.session_id = session_id
         self.pane = lambda: ""
         self.path: str | None = None
         self.offset = 0
@@ -114,7 +116,11 @@ class Harness:
             time.sleep(self.submit_delay)
         tmux("send-keys", "-t", target, "Enter")
 
-    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
+    def channel(self, cwd: str, since: float, at_end: bool = False,
+                session_id: str | None = None) -> Channel:
+        raise NotImplementedError(self.name)
+
+    def sessions(self, cwd: str) -> list[dict]:
         raise NotImplementedError(self.name)
 
     def resume_args(self, session_id: str) -> tuple[str, ...]:
