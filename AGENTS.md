@@ -46,6 +46,8 @@ Measured facts per harness (source: live panes and stores on this machine):
   read only to list resumable sessions. `queue_*.sqlite` stays internal.
 - Resume forms: `claude --resume <id>` / `claude --continue`; `codex resume <id>` /
   `codex resume --last`; `freebuff --continue <id>` / `freebuff --continue`.
+- Fork forms: `claude --resume <id> --fork-session` / `claude --continue --fork-session`;
+  `codex fork <id>` / `codex fork --last`. Freebuff has no fork form.
 - Freebuff's chat store is `~/.config/manicode/projects/<basename(cwd)>/chats/<id>/`;
   `<id>` is the directory name and is what `--continue` takes. Its JSON transcript
   is seeded with the existing message ids when resumed so old turns are not replayed.

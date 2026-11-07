@@ -202,5 +202,13 @@ class Codex(Harness):
     def continue_args(self) -> tuple[str, ...]:
         return ("resume", "--last")
 
+    def fork_args(self, session_id: str) -> tuple[str, ...]:
+        if not SESSION_RE.match(session_id):
+            raise ValueError(f"bad session id {session_id!r}")
+        return ("fork", session_id)
+
+    def fork_continue_args(self) -> tuple[str, ...]:
+        return ("fork", "--last")
+
 
 MOD = Codex()
