@@ -48,6 +48,11 @@ Measured facts per harness (source: live panes and stores on this machine):
   `codex resume --last`; `freebuff --continue <id>` / `freebuff --continue`.
 - Fork forms: `claude --resume <id> --fork-session` / `claude --continue --fork-session`;
   `codex fork <id>` / `codex fork --last`. Freebuff has no fork form.
+- Selectors: **claude** accepts a session id, a session name, or an absolute `.jsonl`
+  transcript path; **codex** accepts a session id or name; **freebuff** accepts only the
+  chat-directory id. The channel binds an exact id or path; for an unknown non-UUID name
+  it binds the newest store for the cwd at its end, matching where `--resume <name>`
+  writes. A UUID that is not found stays an error (no silent fallback).
 - Freebuff's chat store is `~/.config/manicode/projects/<basename(cwd)>/chats/<id>/`;
   `<id>` is the directory name and is what `--continue` takes. Its JSON transcript
   is seeded with the existing message ids when resumed so old turns are not replayed.

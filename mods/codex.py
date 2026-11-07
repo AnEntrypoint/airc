@@ -13,7 +13,7 @@ PROMPT_MARKER = "Ask Codex to do anything"
 ONBOARDING_MARKER = "to get started, describe a task"
 HOME = os.path.join(os.path.expanduser("~"), ".codex")
 UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}$")
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}$")
 
 
 def codex_home() -> str:
@@ -129,7 +129,8 @@ class CodexChannel(Channel):
             for path in self.all_rollouts():
                 if session_id_of(path) == self.session_id:
                     return self._bind(path)
-            return False
+            if UUID_RE.fullmatch(self.session_id):
+                return False
         candidates = self.candidates()
         for path in reversed(candidates):
             if self.session_cwd(path) == self.cwd:
@@ -194,17 +195,22 @@ class Codex(Harness):
     def sessions(self, cwd: str) -> list[dict]:
         return sessions(cwd)
 
+    def selector_kind(self, selector: str) -> str:
+        if UUID_RE.fullmatch(selector):
+            return "id"
+        if NAME_RE.match(selector):
+            return "name"
+        raise ValueError(f"bad session selector {selector!r}")
+
     def resume_args(self, session_id: str) -> tuple[str, ...]:
-        if not SESSION_RE.match(session_id):
-            raise ValueError(f"bad session id {session_id!r}")
+        self.selector_kind(session_id)
         return ("resume", session_id)
 
     def continue_args(self) -> tuple[str, ...]:
         return ("resume", "--last")
 
     def fork_args(self, session_id: str) -> tuple[str, ...]:
-        if not SESSION_RE.match(session_id):
-            raise ValueError(f"bad session id {session_id!r}")
+        self.selector_kind(session_id)
         return ("fork", session_id)
 
     def fork_continue_args(self) -> tuple[str, ...]:

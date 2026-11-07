@@ -22,6 +22,8 @@ PROMPT_GLYPH = "\u276f"
 TITLE_MARKER = "Claude Code"
 CONTENT_TYPES = {"assistant", "user"}
 TRANSCRIPT_ROOT = os.path.join(os.path.expanduser("~"), ".claude", "projects")
+UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,127}$")
 
 
 def project_dir(cwd: str) -> str:
@@ -69,8 +71,13 @@ class ClaudeChannel(Channel):
 
     def bind(self) -> bool:
         if self.session_id:
+            if os.path.isabs(self.session_id) and os.path.isfile(self.session_id):
+                return self._bind(self.session_id)
             target = os.path.join(self.project, f"{self.session_id}.jsonl")
-            return self._bind(target) if os.path.exists(target) else False
+            if os.path.exists(target):
+                return self._bind(target)
+            if UUID_RE.match(self.session_id):
+                return False
         for path in reversed(self.candidates()):
             newest = self.newest([path], self.since)
             if newest:
@@ -141,9 +148,17 @@ class Claude(Harness):
     def sessions(self, cwd: str) -> list[dict]:
         return sessions(cwd)
 
+    def selector_kind(self, selector: str) -> str:
+        if os.path.isabs(selector) and os.path.isfile(selector):
+            return "path"
+        if UUID_RE.match(selector):
+            return "id"
+        if NAME_RE.match(selector):
+            return "name"
+        raise ValueError(f"bad session selector {selector!r}")
+
     def resume_args(self, session_id: str) -> tuple[str, ...]:
-        if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$", session_id):
-            raise ValueError(f"bad session id {session_id!r}")
+        self.selector_kind(session_id)
         return ("--resume", session_id)
 
     def continue_args(self) -> tuple[str, ...]:

@@ -123,6 +123,9 @@ class Harness:
     def sessions(self, cwd: str) -> list[dict]:
         raise NotImplementedError(self.name)
 
+    def selector_kind(self, selector: str) -> str:
+        raise NotImplementedError(self.name)
+
     def resume_args(self, session_id: str) -> tuple[str, ...]:
         raise NotImplementedError(self.name)
 

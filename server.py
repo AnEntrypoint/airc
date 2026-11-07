@@ -17,7 +17,7 @@ HUBS: Dict[str, "Hub"] = {}
 DEFAULT_CWD = os.path.abspath(os.environ.get("CCBRIDGE_CWD", "/workspace/airc/.ccbridge/scratch"))
 IDLE_REAP_SECONDS = float(os.environ.get("CCBRIDGE_IDLE_REAP", "1800"))
 TAG = {"text": "t", "thinking": "k", "tool": "u", "result": "r", "you": "y"}
-SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+SESSION_ID_RE = re.compile(r"^[^-\x00\n][^\x00\n]{0,4095}$")
 TRUE = ("1", "true", "yes", "on")
 
 
