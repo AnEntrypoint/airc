@@ -14,8 +14,8 @@ NOTICE_MARKERS = ("Not enough hours", "Choose another model", "not available on 
 
 
 class FreebuffChannel(Channel):
-    def __init__(self, cwd: str, since: float):
-        super().__init__(cwd, since)
+    def __init__(self, cwd: str, since: float, at_end: bool = False):
+        super().__init__(cwd, since, at_end)
         self.project = os.path.join(os.environ.get("FREEBUFF_HOME") or HOME, "projects",
                                     os.path.basename(self.cwd))
 
@@ -99,8 +99,8 @@ class Freebuff(Harness):
     def pane_ready(self, pane: str) -> bool:
         return PROMPT_MARKER in pane or READY_MARKER in pane or BUSY_MARKER in pane
 
-    def channel(self, cwd: str, since: float) -> Channel:
-        return FreebuffChannel(cwd, since)
+    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
+        return FreebuffChannel(cwd, since, at_end)
 
 
 MOD = Freebuff()

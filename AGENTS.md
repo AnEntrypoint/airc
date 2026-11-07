@@ -27,7 +27,8 @@ A mod answers exactly four questions:
 | how to launch | `argv`, `env_strip`, `term` |
 | read the window | `pane_ready(pane)`, `pane_busy(pane)` |
 | type a prompt | `send(target, text)` (default: bracketed paste + Enter; `submit_delay` before Enter) |
-| clean output | `channel(cwd, since)` -> `Channel.poll(kinds)` yielding `text|thinking|tool|result|you|turn_end` |
+| clean output | `channel(cwd, since, at_end)` -> `Channel.poll(kinds)` yielding `text|thinking|tool|result|you|turn_end` |
+| resume | `resume_args(session_id)`, `continue_args()` |
 
 Measured facts per harness (source: live panes and stores on this machine):
 
@@ -67,8 +68,18 @@ python3 analyze.py runs/r1.raw --view text --tail 40
 ```
 
 `/ws` query params: `session` (named hub, reconnectable), `harness` (claude|codex|freebuff,
-fixed at hub creation), `cwd` (new hub only), `mode=plain|tagged`, `kinds=text,tool`.
-`GET /sessions` lists live hubs with their harness.
+fixed at hub creation), `cwd` (new hub only), `mode=plain|tagged`, `kinds=text,tool`,
+`resume=<session-id>`, `continue=1`.
+`GET /sessions` lists live hubs with their harness and launch args.
+
+## Resume
+
+`resume` and `continue` are new-hub launch variants, fixed at hub creation like
+`harness` and `cwd`. They ask the mod for `resume_args` / `continue_args`, so Claude
+launches as `claude --resume <id>` or `claude --continue`. A resumed hub's channel
+starts at the transcript's end (`Channel.at_end`), so a client receives only events
+from after the resume instead of the saved conversation. A client that asks for
+different launch args on an existing hub is refused; stop the hub first.
 
 ## Constraints
 

@@ -13,8 +13,8 @@ HOME = os.path.join(os.path.expanduser("~"), ".codex")
 
 
 class CodexChannel(Channel):
-    def __init__(self, cwd: str, since: float):
-        super().__init__(cwd, since)
+    def __init__(self, cwd: str, since: float, at_end: bool = False):
+        super().__init__(cwd, since, at_end)
         self.rollouts = os.path.join(os.environ.get("CODEX_HOME") or HOME, "sessions")
 
     def candidates(self) -> list[str]:
@@ -87,8 +87,8 @@ class Codex(Harness):
     def pane_ready(self, pane: str) -> bool:
         return PROMPT_MARKER in pane or ONBOARDING_MARKER in pane or BUSY_MARKER in pane
 
-    def channel(self, cwd: str, since: float) -> Channel:
-        return CodexChannel(cwd, since)
+    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
+        return CodexChannel(cwd, since, at_end)
 
 
 MOD = Codex()

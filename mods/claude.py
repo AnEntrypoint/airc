@@ -28,9 +28,26 @@ def project_dir(cwd: str) -> str:
     return os.path.join(TRANSCRIPT_ROOT, re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(cwd)))
 
 
+def sessions(cwd: str) -> list[dict]:
+    found = []
+    for path in glob.glob(os.path.join(project_dir(cwd), "*.jsonl")):
+        session_id = os.path.basename(path)[:-len(".jsonl")]
+        if not session_id or session_id.startswith("agent-"):
+            continue
+        try:
+            stat = os.stat(path)
+        except OSError:
+            continue
+        if stat.st_size == 0:
+            continue
+        found.append({"session_id": session_id, "path": path,
+                      "mtime": stat.st_mtime, "size": stat.st_size})
+    return sorted(found, key=lambda item: item["mtime"])
+
+
 class ClaudeChannel(Channel):
-    def __init__(self, cwd: str, since: float):
-        super().__init__(cwd, since)
+    def __init__(self, cwd: str, since: float, at_end: bool = False):
+        super().__init__(cwd, since, at_end)
         self.project = project_dir(self.cwd)
 
     def candidates(self) -> list[str]:
@@ -113,8 +130,16 @@ class Claude(Harness):
     def pane_ready(self, pane: str) -> bool:
         return PROMPT_GLYPH in pane or BUSY_MARKER in pane or TITLE_MARKER in pane
 
-    def channel(self, cwd: str, since: float) -> Channel:
-        return ClaudeChannel(cwd, since)
+    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
+        return ClaudeChannel(cwd, since, at_end)
+
+    def resume_args(self, session_id: str) -> tuple[str, ...]:
+        if not re.match(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$", session_id):
+            raise ValueError(f"bad session id {session_id!r}")
+        return ("--resume", session_id)
+
+    def continue_args(self) -> tuple[str, ...]:
+        return ("--continue",)
 
 
 MOD = Claude()

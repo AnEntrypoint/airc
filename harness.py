@@ -17,9 +17,10 @@ def tmux(*args: str) -> "subprocess.CompletedProcess":
 
 
 class Channel:
-    def __init__(self, cwd: str, since: float):
+    def __init__(self, cwd: str, since: float, at_end: bool = False):
         self.cwd = os.path.abspath(cwd)
         self.since = since
+        self.at_end = at_end
         self.pane = lambda: ""
         self.path: str | None = None
         self.offset = 0
@@ -33,7 +34,10 @@ class Channel:
     def _bind(self, path: str) -> bool:
         if path != self.path:
             self.path = path
-            self.offset = 0
+            try:
+                self.offset = os.path.getsize(path) if self.at_end else 0
+            except OSError:
+                self.offset = 0
             self.pending = ""
         return True
 
@@ -110,7 +114,13 @@ class Harness:
             time.sleep(self.submit_delay)
         tmux("send-keys", "-t", target, "Enter")
 
-    def channel(self, cwd: str, since: float) -> Channel:
+    def channel(self, cwd: str, since: float, at_end: bool = False) -> Channel:
+        raise NotImplementedError(self.name)
+
+    def resume_args(self, session_id: str) -> tuple[str, ...]:
+        raise NotImplementedError(self.name)
+
+    def continue_args(self) -> tuple[str, ...]:
         raise NotImplementedError(self.name)
 
     def env(self, base: dict) -> dict:

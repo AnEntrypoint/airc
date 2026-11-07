@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
 import time
 from typing import Dict, Set
 
@@ -16,15 +17,21 @@ HUBS: Dict[str, "Hub"] = {}
 DEFAULT_CWD = os.path.abspath(os.environ.get("CCBRIDGE_CWD", "/workspace/airc/.ccbridge/scratch"))
 IDLE_REAP_SECONDS = float(os.environ.get("CCBRIDGE_IDLE_REAP", "1800"))
 TAG = {"text": "t", "thinking": "k", "tool": "u", "result": "r", "you": "y"}
+SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$")
+TRUE = ("1", "true", "yes", "on")
 
 
 class Hub:
-    def __init__(self, name: str, cwd: str, harness: str, kinds=("text", "tool")):
+    def __init__(self, name: str, cwd: str, harness: str, kinds=("text", "tool"),
+                 launch_args: tuple[str, ...] = ()):
         self.name = name
         self.cwd = cwd
         self.harness = harness
         self.kinds = kinds
-        self.sess = C.AgentSession(cwd, harness=harness, name=f"ccb-{name}")
+        self.launch_args = tuple(launch_args)
+        self.sess = C.AgentSession(cwd, harness=harness, name=f"ccb-{name}",
+                                   launch_args=self.launch_args,
+                                   at_end=bool(self.launch_args))
         self.clients: Set[web.WebSocketResponse] = set()
         self.modes: Dict[web.WebSocketResponse, str] = {}
         self.queue: list[str] = []
@@ -128,13 +135,34 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
         return ws
     kinds = tuple(k for k in request.query.get("kinds", "text,tool").split(",") if k)
 
+    resume_id = request.query.get("resume") or ""
+    continue_last = request.query.get("continue", "").lower() in TRUE
+    launch_args: tuple[str, ...] = ()
+    if resume_id and continue_last:
+        await ws.send_str("resume and continue are mutually exclusive")
+        await ws.close()
+        return ws
+    if resume_id or continue_last:
+        adapter = mods.load(harness)
+        try:
+            launch_args = (adapter.continue_args() if continue_last
+                           else adapter.resume_args(resume_id))
+        except (NotImplementedError, ValueError) as exc:
+            await ws.send_str(f"harness {harness!r} cannot resume: {exc}")
+            await ws.close()
+            return ws
+
     hub = HUBS.get(name)
     if hub is not None and not hub.alive:
         await hub.stop()
         HUBS.pop(name, None)
         hub = None
+    if hub is not None and launch_args and hub.launch_args != launch_args:
+        await ws.send_str(f"session {name!r} is already running with different launch args")
+        await ws.close()
+        return ws
     if hub is None:
-        hub = Hub(name, cwd, harness, kinds)
+        hub = Hub(name, cwd, harness, kinds, launch_args)
         HUBS[name] = hub
         await hub.start()
     hub.clients.add(ws)
@@ -197,7 +225,8 @@ def describe(hub: "Hub") -> dict:
     pane = hub.sess.pane()
     lines = [line.rstrip() for line in pane.splitlines() if line.strip()]
     return {"clients": len(hub.clients), "alive": hub.alive, "harness": hub.harness,
-            "cwd": hub.cwd, "busy": hub.sess.harness.pane_busy(pane), "pane_tail": lines[-12:]}
+            "cwd": hub.cwd, "busy": hub.sess.harness.pane_busy(pane),
+            "launch_args": list(hub.launch_args), "pane_tail": lines[-12:]}
 
 
 async def sessions(_):
