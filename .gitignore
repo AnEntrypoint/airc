@@ -3,30 +3,15 @@ __pycache__/
 .probe/
 runs/
 .ccbridge/
+.env
+.env.local
+.agentplug/
+.agentplug-kv/
+core.*
 .gm/exec-spool/
 .gm/*.png
 .gm/gm.db*
 .gm/*.log
-
-# >>> plugkit managed
-# .gm/prd-log.jsonl, .gm/unknowns-log.jsonl and .gm/expansion-audit.jsonl are append-only state that stays tracked, so no rule here ignores them
-# .gm/prd.yml + .gm/mutables.yml: per-dispatch runtime state, rewritten on
-# nearly every PLAN/EXECUTE/VERIFY dispatch -- same class as .gm/witness/
-# and gm.db above (transient, regenerated, never durable source). Tracking
-# it committed a near-full-file version on every single dispatch (970
-# revisions, 743MB logical history for a currently-2.1MB file), roughly
-# half of .git on-disk blob weight -- untracked here per this project own
-# derived-stores-are-transient-never-tracked policy.
-#
-# The successors of those two files: PRD rows and mutables now live one file
-# per row under .gm/prd/ and .gm/unknowns/, so two lanes can never lose each
-# other's row to one whole-file rewrite, and a resolved row's material moves
-# into .gm/prd-log.jsonl / .gm/unknowns-log.jsonl, append-only and hash-chained.
-# The row folders are the same transient class as the files they replace. The chained
-# logs (.gm/prd-log.jsonl, .gm/unknowns-log.jsonl, .gm/expansion-audit.jsonl) are authored
-# project state and are never ignored (MUST_STAY_TRACKED in rs-plugkit crates/plugkit-core/src/gitignore.rs).
-.agentplug-kv/
-.gm/exec-spool/
 .gm/gm-fired-*
 .gm/needs-gm
 .gm/lastskill
@@ -75,5 +60,12 @@ runs/
 .gm/receipts/
 .gm/witness-log.md
 .gm/witness-out/
+.gm/locks/
+.gm/prd/
+.gm/unknowns/
+.gm/unknowns.dir-migrated.json
+.gm/prd.log-dir-migrated.json
+.gm/prd-log.jsonl.chain-version.json
+.gm/prd-references-gate.json
+.gm/browser-*/
 crates/**/.gm/
-# <<< plugkit managed

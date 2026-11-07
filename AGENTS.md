@@ -77,3 +77,7 @@ fixed at hub creation), `cwd` (new hub only), `mode=plain|tagged`, `kinds=text,t
 - Idle hubs with no clients are reaped after `CCBRIDGE_IDLE_REAP` seconds (1800).
 - Transcript paths and record shapes are undocumented harness internals; keep them
   isolated in `mods/<name>.py`, one `Channel` per harness.
+
+## gm state
+
+The append-only PRD log `.gm/prd-log.jsonl`, its row shards `.gm/prd-log.d/` and `.gm/next-step.md` are authored project state and are not ignored. PRD row folders `.gm/prd/` and `.gm/unknowns/`, spools, caches, databases, counters, locks, dream-rsi scratch, browser captures, `.agentplug/`, `.agentplug-kv/` and core dumps are transient and ignored. `.env` and `.env.local` stay out of the repo.
