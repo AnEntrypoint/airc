@@ -171,6 +171,9 @@ class Freebuff(Harness):
     def sessions(self, cwd: str) -> list[dict]:
         return sessions(cwd)
 
+    def find(self, session_id: str) -> dict | None:
+        return None
+
     def selector_kind(self, selector: str) -> str:
         if CHAT_ID_RE.match(selector):
             return "id"

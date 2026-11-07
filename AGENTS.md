@@ -29,6 +29,7 @@ A mod answers exactly four questions:
 | type a prompt | `send(target, text)` (default: bracketed paste + Enter; `submit_delay` before Enter) |
 | clean output | `channel(cwd, since, at_end, session_id)` -> `Channel.poll(kinds)` yielding `text|thinking|tool|result|you|turn_end` |
 | list sessions | `sessions(cwd)` -> `[{session_id, path, mtime, size}]` |
+| find a session | `find(session_id)` -> session dict or `None` |
 | resume | `resume_args(session_id)`, `continue_args()` |
 
 Measured facts per harness (source: live panes and stores on this machine):
@@ -52,7 +53,10 @@ Measured facts per harness (source: live panes and stores on this machine):
   transcript path; **codex** accepts a session id or name; **freebuff** accepts only the
   chat-directory id. The channel binds an exact id or path; for an unknown non-UUID name
   it binds the newest store for the cwd at its end, matching where `--resume <name>`
-  writes. A UUID that is not found stays an error (no silent fallback).
+  writes. A UUID that is not found in the cwd is looked up across the mod's whole
+  store (`claude` scans every project transcript dir, `codex` queries the thread
+  index without a cwd filter); the channel binds the path that lookup returns. If
+  the global lookup also fails, it stays an error (no silent fallback).
 - Freebuff's chat store is `~/.config/manicode/projects/<basename(cwd)>/chats/<id>/`;
   `<id>` is the directory name and is what `--continue` takes. Its JSON transcript
   is seeded with the existing message ids when resumed so old turns are not replayed.

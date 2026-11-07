@@ -126,6 +126,9 @@ class Harness:
     def selector_kind(self, selector: str) -> str:
         raise NotImplementedError(self.name)
 
+    def find(self, session_id: str) -> dict | None:
+        return None
+
     def resume_args(self, session_id: str) -> tuple[str, ...]:
         raise NotImplementedError(self.name)
 

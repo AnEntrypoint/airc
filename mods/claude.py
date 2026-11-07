@@ -30,6 +30,13 @@ def project_dir(cwd: str) -> str:
     return os.path.join(TRANSCRIPT_ROOT, re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(cwd)))
 
 
+def find_path(session_id: str) -> str | None:
+    paths = glob.glob(os.path.join(TRANSCRIPT_ROOT, "*", f"{session_id}.jsonl"))
+    if not paths:
+        return None
+    return max(paths, key=lambda path: os.stat(path).st_mtime)
+
+
 def sessions(cwd: str) -> list[dict]:
     found = []
     for path in glob.glob(os.path.join(project_dir(cwd), "*.jsonl")):
@@ -77,7 +84,8 @@ class ClaudeChannel(Channel):
             if os.path.exists(target):
                 return self._bind(target)
             if UUID_RE.match(self.session_id):
-                return False
+                global_path = find_path(self.session_id)
+                return self._bind(global_path) if global_path else False
         for path in reversed(self.candidates()):
             newest = self.newest([path], self.since)
             if newest:
@@ -147,6 +155,17 @@ class Claude(Harness):
 
     def sessions(self, cwd: str) -> list[dict]:
         return sessions(cwd)
+
+    def find(self, session_id: str) -> dict | None:
+        path = find_path(session_id)
+        if not path:
+            return None
+        try:
+            stat = os.stat(path)
+        except OSError:
+            return None
+        return {"session_id": session_id, "path": path,
+                "mtime": stat.st_mtime, "size": stat.st_size}
 
     def selector_kind(self, selector: str) -> str:
         if os.path.isabs(selector) and os.path.isfile(selector):

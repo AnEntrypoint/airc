@@ -79,6 +79,30 @@ def db_sessions(cwd: str) -> list[dict]:
     return list(found.values())
 
 
+def find_db_session(session_id: str) -> dict | None:
+    for db in thread_dbs():
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            row = con.execute(
+                "select id, rollout_path, coalesce(updated_at_ms, created_at_ms, 0), cwd "
+                "from threads where id = ?", (session_id,)).fetchone()
+            con.close()
+        except (sqlite3.Error, OSError, ValueError):
+            continue
+        if not row:
+            continue
+        sid, rollout, updated_ms, cwd = row
+        size = 0
+        try:
+            if rollout:
+                size = os.stat(rollout).st_size
+        except OSError:
+            pass
+        return {"session_id": str(sid), "path": rollout or "",
+                "mtime": (updated_ms or 0) / 1000.0, "size": size, "cwd": cwd}
+    return None
+
+
 def rollout_sessions(cwd: str) -> list[dict]:
     rows = []
     for path in rollout_paths():
@@ -194,6 +218,21 @@ class Codex(Harness):
 
     def sessions(self, cwd: str) -> list[dict]:
         return sessions(cwd)
+
+    def find(self, session_id: str) -> dict | None:
+        row = find_db_session(session_id)
+        if row is not None:
+            return row
+        for path in rollout_paths():
+            if session_id_of(path) != session_id:
+                continue
+            try:
+                stat = os.stat(path)
+            except OSError:
+                continue
+            return {"session_id": session_id, "path": path,
+                    "mtime": stat.st_mtime, "size": stat.st_size}
+        return None
 
     def selector_kind(self, selector: str) -> str:
         if UUID_RE.fullmatch(selector):
