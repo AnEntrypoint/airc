@@ -100,7 +100,9 @@ starts at the store's end (`Channel.at_end`), so a client receives only events f
 after the resume instead of the saved conversation. Freebuff's JSON channel seeds
 the old message ids for the same reason. `fork=1` asks the mod for `fork_args` /
 `fork_continue_args` (`claude --fork-session`, `codex fork`); the new session id is
-unknown at launch, so the channel binds the newest store created after the start. A
+unknown at launch, so the channel binds the newest store created after the start.
+Records whose timestamp predates the hub start are ignored, so a fork that is still
+copying history into its new transcript does not replay that tail as new output. A
 client that asks for different launch args on an existing hub is refused; stop the
 hub first.
 
