@@ -142,7 +142,7 @@ class ClaudeChannel(Channel):
 
 class Claude(Harness):
     name = "claude"
-    argv = ("claude",)
+    argv = ("claude", "--dangerously-skip-permissions") if os.environ.get("AIRC_CLAUDE_SKIP_PERMISSIONS") == "1" else ("claude",)
     env_strip = NESTING_VARS
 
     def pane_busy(self, pane: str) -> bool:
