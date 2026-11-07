@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import glob
 import json
 import os
@@ -32,6 +33,16 @@ class Channel:
 
     def poll(self, kinds=("text", "tool")) -> Iterator[dict]:
         return iter(())
+
+    def before_start(self, record: dict) -> bool:
+        stamp = record.get("timestamp")
+        if not stamp:
+            return False
+        try:
+            value = datetime.datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).timestamp()
+        except (ValueError, AttributeError):
+            return False
+        return value + 3.0 < self.since
 
     def _bind(self, path: str) -> bool:
         if path != self.path:

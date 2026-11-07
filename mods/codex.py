@@ -166,6 +166,8 @@ class CodexChannel(Channel):
             return
         want = set(kinds) | {"turn_end"}
         for record in self._tail_records():
+            if self.before_start(record):
+                continue
             rtype = record.get("type")
             payload = record.get("payload") or {}
             ptype = payload.get("type")

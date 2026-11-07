@@ -98,6 +98,8 @@ class ClaudeChannel(Channel):
         want = set(kinds) | {"turn_end"}
         ordered: dict[str, dict[int, str]] = {}
         for record in self._tail_records():
+            if self.before_start(record):
+                continue
             rtype = record.get("type")
             if rtype == "system":
                 if record.get("subtype") == "turn_duration":
