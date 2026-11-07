@@ -66,6 +66,9 @@ core.*
 .gm/unknowns.dir-migrated.json
 .gm/prd.log-dir-migrated.json
 .gm/prd-log.jsonl.chain-version.json
+.gm/prd-log.jsonl
+.gm/prd-log.d/
+.gm/next-step.md
 .gm/prd-references-gate.json
 .gm/browser-*/
 crates/**/.gm/
