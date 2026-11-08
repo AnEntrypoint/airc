@@ -1,118 +1,101 @@
 # Agent instructions for airc
 
-ccbridge drives an unmodified interactive coding agent in a tmux pane: text in over a
-WebSocket, plain text out, no display artifacts. Only the harness adapters are
-harness-specific; the session, server and capture instrument are not.
+ccbridge drives an unmodified interactive coding agent in a pseudo-terminal: text in over a WebSocket, plain text out, no display artifacts. Only the harness templates are harness-specific; the PTY, screen, session, server and tools are not.
 
 ## Invariants
 
-- Never pass a flag that makes a harness non-interactive or key-based (`-p`, `--print`,
-  `--bare`, `--api-key`, `--settings`, `--safe-mode`, `--restricted`): the session must
-  authenticate exactly as a human's does. `server.py` and `capture.py` refuse them.
-- Output is read from the harness's own transcript/store, never by scraping the TUI: the
-  TUIs are alternate-screen with no scrollback and repaint diffs, so screen text loses
-  spacing and anything past one screenful. The pane is used only for ready/busy.
-- A harness launches with the vars that mark a *nested* session of itself dropped
-  (`env -u <VARS> <argv>`), so the child is a normal top-level session.
+- Never pass a flag that makes a harness non-interactive or key-based: `-p`, `--print`, `--bare`, `--api-key`, `--settings`, `--safe-mode`, `--restricted`. The session must authenticate exactly as a human's does. `ccbridge capture` refuses them. Server launch args come only from a template's `resume`, `continue`, `fork` and `fork_continue` forms, never from client input.
+- Output is read from the harness's own transcript or store, never by scraping the screen. The screen is used for ready and busy markers, freebuff notice lines, and the `pane_tail` field of `GET /sessions`.
+- A harness launches with its `env_strip` variables removed from the child environment, so a harness started inside another session runs as a normal top-level session.
+- Max-plan / OAuth is never bypassed: no injected API key, base URL or auth token.
 - No comments in source: intent lives in names, durable facts live here.
 
-## Harnesses (mods/)
+## Layout
 
-`harness.py` defines the `Harness` interface and `Channel` (incremental transcript
-reader). `mods/__init__.py` registers the mods; `mods.load(name)` resolves one.
-A mod answers exactly four questions:
-
-| fact | member |
+| path | role |
 |---|---|
-| how to launch | `argv`, `env_strip`, `term` |
-| read the window | `pane_ready(pane)`, `pane_busy(pane)` |
-| type a prompt | `send(target, text)` (default: bracketed paste + Enter; `submit_delay` before Enter) |
-| clean output | `channel(cwd, since, at_end, session_id)` -> `Channel.poll(kinds)` yielding `text|thinking|tool|result|you|turn_end` |
-| list sessions | `sessions(cwd)` -> `[{session_id, path, mtime, size}]` |
-| find a session | `find(session_id)` -> session dict or `None` |
-| resume | `resume_args(session_id)`, `continue_args()` |
+| `CMakeLists.txt`, `vcpkg.json` | target `ccbridge`; Boost.Beast/Asio, nlohmann-json, CLI11, sqlite3; libvterm built from source |
+| `src/main.cpp` | CLI: `serve`, `send`, `client`, `capture`, `analyze`, `templates` |
+| `src/common/` | resource and template paths, text, time, `pty` (PTY spawn and I/O), `screen` (libvterm) |
+| `src/harness/` | `event` (kinds), `channel` (incremental transcript reader), `transcript` (kind factory), `kinds/` (one file per transcript kind), `harness` (markers, env, paste, launch forms), `registry` (template loader) |
+| `src/session/agent_session.*` | one PTY-hosted agent: start, send, events, ready and busy |
+| `src/server/server.*` | WebSocket and HTTP server, hubs, reaper |
+| `src/tools/` | `send`, `client`, `capture`, `analyze` |
+| `templates/*.json` | harness definitions, read at run time (schema in `templates/README.md`) |
+| `web/index.html` | browser client served at `/` |
+| `third_party/libvterm/` | vendored libvterm 0.3.3 (MIT), unmodified |
+| `tests/e2e.sh`, `tests/fixtures/` | end-to-end test with a fake freebuff-kind harness |
+| `.github/workflows/ci.yml` | six-target build; e2e on Linux and macOS; release on main |
 
-Measured facts per harness (source: live panes and stores on this machine):
+## Harnesses
 
-| harness | ready marker | busy marker | transcript |
+A harness is a template, `templates/<name>.json`. Templates are read at run time from the search path: `--templates DIR`, `$CCBRIDGE_TEMPLATES`, `<resource root>/templates`, `./templates`. The built-in transcript kinds are `claude-jsonl`, `codex-jsonl` and `freebuff-json`.
+
+| fact | claude | codex | freebuff |
 |---|---|---|---|
-| claude | `❯` or `Claude Code` | `esc to interrupt` | `~/.claude/projects/<slug(cwd)>/*.jsonl`; `assistant`/`user` records, text blocks stitched by `apiBlockIndex` within `message.id`; `stop_reason` ends the turn |
-| codex | `Ask Codex to do anything` (or `to get started, describe a task` onboarding) | `esc to interrupt` (shown as `• Working (Ns • esc to interrupt)`) | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` (codex-cli 0.166.0); `response_item` payload `message` role `assistant` content `output_text`; `event_msg` `task_complete` ends the turn; `session_meta.payload.cwd` selects the session |
-| freebuff | `Enter a coding task` or `for history · ? for help` | `Starting your model session` | `~/.config/manicode/projects/<basename(cwd)>/chats/<ISO>/chat-messages.json`; array of `{variant: user|ai, blocks:[{type:text, content, textType?}]}`; `isComplete`/`userError` end the turn |
+| ready markers (any) | `❯`, `esc to interrupt`, `Claude Code` | `Ask Codex to do anything`, `to get started, describe a task`, `esc to interrupt` | `Enter a coding task`, `for history · ? for help`, `Starting your model session` |
+| busy marker | `esc to interrupt` | `esc to interrupt` | `Starting your model session` |
+| transcript | `~/.claude/projects/<slug(cwd)>/*.jsonl` | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` plus `state_*.sqlite` table `threads` | `$FREEBUFF_HOME` or `~/.config/manicode`, then `projects/<basename(cwd)>/chats/<id>/chat-messages.json` |
+| record shape | `assistant`/`user` records; `message.content` blocks; text stitched by `apiBlockIndex` within `message.id` | `response_item` payloads: `message` (assistant and user text), `reasoning` (summary), `function_call`, `function_call_output`; `session_meta.payload.cwd` selects the session | JSON array of `{variant: user or ai, blocks: [{type, content, textType?}], isComplete?, userError?}` |
+| turn end | `system` record with `subtype: turn_duration` | `event_msg` with `payload.type: task_complete` | `isComplete`; a `userError` is sent as a result first; a notice line on the screen (`Not enough hours`, `Choose another model`, `not available on this connection`) also ends the turn |
+| resume | `--resume <id>` | `resume <id>` | `--continue <id>` |
+| continue | `--continue` | `resume --last` | `--continue` |
+| fork | `--resume <id> --fork-session`, `--continue --fork-session` | `fork <id>`, `fork --last` | none |
+| selector | absolute `.jsonl` path, session UUID, or name | session UUID or name | chat directory id |
 
-- freebuff's config home is `~/.config/manicode` (the package is `freebuff`, the binary
-  `~/.config/manicode/freebuff`). `projects/<name>` keys on the cwd's basename, not a slug.
-- codex's transcript is JSONL under `$CODEX_HOME` (default `~/.codex`); `state_*.sqlite`
-  table `threads` is the session index (`id`, `cwd`, `updated_at_ms`, `archived`),
-  read only to list resumable sessions. `queue_*.sqlite` stays internal.
-- Resume forms: `claude --resume <id>` / `claude --continue`; `codex resume <id>` /
-  `codex resume --last`; `freebuff --continue <id>` / `freebuff --continue`.
-- Fork forms: `claude --resume <id> --fork-session` / `claude --continue --fork-session`;
-  `codex fork <id>` / `codex fork --last`. Freebuff has no fork form.
-- Selectors: **claude** accepts a session id, a session name, or an absolute `.jsonl`
-  transcript path; **codex** accepts a session id or name; **freebuff** accepts only the
-  chat-directory id. The channel binds an exact id or path; for an unknown non-UUID name
-  it binds the newest store for the cwd at its end, matching where `--resume <name>`
-  writes. A UUID that is not found in the cwd is looked up across the mod's whole
-  store (`claude` scans every project transcript dir, `codex` queries the thread
-  index without a cwd filter); the channel binds the path that lookup returns. If
-  the global lookup also fails, it stays an error (no silent fallback).
-- Freebuff's chat store is `~/.config/manicode/projects/<basename(cwd)>/chats/<id>/`;
-  `<id>` is the directory name and is what `--continue` takes. Its JSON transcript
-  is seeded with the existing message ids when resumed so old turns are not replayed.
-- Adding a harness: create `mods/<name>.py` exposing a `Harness` instance as `MOD`,
-  register it in `mods/__init__.py`, and measure its four facts with
-  `python3 capture.py --harness <name> --seq '["hi"]' --out runs/<name>.raw --dump-markers`.
+Binding: claude and codex bind an exact session id or path. An unknown non-UUID name binds the newest store for the cwd at its end. A UUID not found in the cwd is looked up across the whole store, and if that also fails the attach is refused; there is no silent fallback. Freebuff accepts chat ids only.
 
-## Files
+Channel: records whose timestamp is more than 3 s before the hub started are skipped. A file is bound only if its mtime is within 3 s of the start. A resumed hub reads its file from the end. Results are cut to 4000 code points.
 
-| file | role |
-|---|---|
-| `harness.py` | `Harness` interface, `Channel` reader, tmux wrapper, bracketed-paste send |
-| `mods/claude.py`, `mods/codex.py`, `mods/freebuff.py` | one adapter each |
-| `ccsession.py` | `AgentSession(cwd, harness=...)` (start/send/events/busy/ready); `ClaudeSession` shim |
-| `server.py` | aiohttp WebSocket server, hubs keyed by session name, per-hub harness |
-| `capture.py` | PTY capture instrument for any harness (raw bytes + marker report) |
-| `analyze.py` | raw-capture derivation: `--view strip` drops ANSI/control chars; `--view text` also drops TUI chrome lines (rules, bars, prompt, spinner, status) and keeps the last `\r` rewrite per line |
-| `wstest.py` | CLI WebSocket client |
+## Protocol
+
+`GET /ws` upgrades to WebSocket. Query parameters:
+
+- `session`: named hub; reconnect with the same name to keep talking. Default `default`.
+- `harness`: template name, fixed when the hub is created. Default: the template with `"default": true`.
+- `cwd`: working directory, new hub only. Default `CCBRIDGE_CWD`, else `<process cwd>/.ccbridge/scratch`.
+- `mode`: `plain` (default) or `tagged`, per client.
+- `kinds`: comma list, default `text,tool`. Unknown names are ignored.
+- `resume=<id>`: new hub only; launches the harness's resume form.
+- `continue=1`: new hub only; continue form. `resume` and `continue` are exclusive.
+- `fork=1`: with `resume` or `continue`, uses the fork form.
+
+Frames:
+
+- Client to server: a text frame is a prompt. Blank frames are ignored.
+- Server to client, `plain`: text as it is produced; an empty frame ends the turn.
+- Server to client, `tagged`: `t:` text, `k:` thinking, `u:` tool, `r:` result, `y:` you, `e:` turn end.
+- A client attaching mid-turn receives only events produced after it attaches. Nothing is replayed.
+- When the agent process exits, every client receives an empty frame.
+
+HTTP:
+
+- `GET /` serves the browser client.
+- `GET /sessions` lists hubs with `clients`, `alive`, `harness`, `cwd`, `busy`, `launch_args` and `pane_tail` (the last 12 non-blank screen lines).
+- `DELETE /sessions/{name}` stops a hub and its agent process.
+
+Lifecycle:
+
+- A hub whose agent is not alive is replaced on the next attach. An alive hub asked for different launch args is refused; stop it first.
+- A hub with no clients and no activity for `CCBRIDGE_IDLE_REAP` seconds (default 1800) is stopped. The reaper runs every 60 s.
+- Limits: 16 MiB per inbound frame; WebSocket idle timeout 60 s with keep-alive pings.
 
 ## Run
 
+Builds and tests run in GitHub Actions (`.github/workflows/ci.yml`). Locally, the same steps are:
+
 ```bash
-python3 server.py --host 127.0.0.1 --port 8787          # http://127.0.0.1:8787/?harness=codex
-python3 ccsession.py --harness codex --cwd DIR "prompt"
-python3 capture.py --harness freebuff --seq '["hi"]' --out runs/fb.raw --dump-markers
-python3 analyze.py runs/r1.raw --view text --tail 40
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/ccbridge serve --host 127.0.0.1 --port 8787
+./build/ccbridge client --harness codex "hi"
+./build/ccbridge send --harness freebuff --cwd DIR "hi"
+./build/ccbridge capture --harness freebuff --seq '["hi"]' --out runs/fb.raw --dump-markers
+./build/ccbridge analyze runs/fb.raw --view text --tail 40
+./build/ccbridge templates --check
 ```
 
-`/ws` query params: `session` (named hub, reconnectable), `harness` (claude|codex|freebuff,
-fixed at hub creation), `cwd` (new hub only), `mode=plain|tagged`, `kinds=text,tool`,
-`resume=<session-id>`, `continue=1`, `fork=1`.
-`GET /sessions` lists live hubs with their harness and launch args.
-
-## Resume
-
-`resume` and `continue` are new-hub launch variants, fixed at hub creation like
-`harness` and `cwd`. They ask the mod for `resume_args` / `continue_args`, so the
-harness launches in its own resume form (`claude --resume <id>`, `codex resume <id>`,
-`freebuff --continue <id>`). The resumed channel binds to exactly that session and
-starts at the store's end (`Channel.at_end`), so a client receives only events from
-after the resume instead of the saved conversation. Freebuff's JSON channel seeds
-the old message ids for the same reason. `fork=1` asks the mod for `fork_args` /
-`fork_continue_args` (`claude --fork-session`, `codex fork`); the new session id is
-unknown at launch, so the channel binds the newest store created after the start.
-Records whose timestamp predates the hub start are ignored, so a fork that is still
-copying history into its new transcript does not replay that tail as new output. A
-client that asks for different launch args on an existing hub is refused; stop the
-hub first.
-
-## Constraints
-
-- Max-plan / OAuth is never bypassed: no injected API key, base URL or auth token.
-- A client attaching mid-turn sees only later events (the hub polls once, no replay).
-- Idle hubs with no clients are reaped after `CCBRIDGE_IDLE_REAP` seconds (1800).
-- Transcript paths and record shapes are undocumented harness internals; keep them
-  isolated in `mods/<name>.py`, one `Channel` per harness.
+Adding an agent that uses an existing transcript kind needs only a new `templates/<name>.json` (fields in `templates/README.md`); no rebuild. A new transcript format needs a kind in `src/harness/kinds/`, registered in `src/harness/transcript.cpp`.
 
 ## gm state
 
