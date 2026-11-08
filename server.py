@@ -244,7 +244,7 @@ def describe(hub: "Hub") -> dict:
 
 async def sessions(_):
     return web.json_response({
-        name: await asyncio.to_thread(describe, hub) for name, hub in HUBS.items()})
+        name: await asyncio.to_thread(describe, hub) for name, hub in list(HUBS.items())})
 
 
 async def delete_session(request: web.Request):
