@@ -151,7 +151,6 @@ public:
         if (!attach()) return out;
         KindSet want = wanted(kinds);
         want.insert(Kind::TurnEnd);
-        std::map<std::string, std::map<long long, std::string>> ordered;
         for (const auto& record : tail_records()) {
             if (before_start(record) || !record.is_object()) continue;
             std::string type = string_member(record, "type");
@@ -178,7 +177,7 @@ public:
             if (api_index.is_number_integer()) index = api_index.get<long long>();
             for (const auto& block : blocks) {
                 if (!block.is_object()) continue;
-                emit_block(block, message_id, index, want, ordered, out);
+                emit_block(block, message_id, index, want, out);
             }
         }
         return out;
@@ -186,12 +185,10 @@ public:
 
 private:
     void emit_block(const json& block, const std::string& message_id, long long index,
-                    const KindSet& want,
-                    std::map<std::string, std::map<long long, std::string>>& ordered,
-                    std::vector<Event>& out) {
+                    const KindSet& want, std::vector<Event>& out) {
         std::string type = string_member(block, "type");
         if (type == "text") {
-            auto& accumulated = ordered[message_id];
+            auto& accumulated = text_blocks_[message_id];
             accumulated[index] = string_member(block, "text");
             std::string full;
             for (const auto& part : accumulated) full += part.second;
@@ -265,6 +262,7 @@ private:
 
     fs::path root_;
     fs::path project_;
+    std::map<std::string, std::map<long long, std::string>> text_blocks_;
 };
 
 class ClaudeTranscript : public Transcript {

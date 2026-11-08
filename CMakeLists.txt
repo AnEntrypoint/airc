@@ -25,11 +25,11 @@ else()
 endif()
 
 file(GLOB_RECURSE CCB_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(FILTER CCB_SOURCES EXCLUDE REGEX "/src/main\\.cpp$")
 
-add_executable(ccbridge ${CCB_SOURCES})
-target_include_directories(ccbridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_compile_definitions(ccbridge PRIVATE CCB_VERSION="${PROJECT_VERSION}")
-target_link_libraries(ccbridge PRIVATE
+add_library(ccb_core OBJECT ${CCB_SOURCES})
+target_include_directories(ccb_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ccb_core PUBLIC
     vterm
     Boost::headers
     nlohmann_json::nlohmann_json
@@ -37,12 +37,23 @@ target_link_libraries(ccbridge PRIVATE
     SQLite::SQLite3
     Threads::Threads)
 
-if(MSVC)
-    target_compile_options(ccbridge PRIVATE /W4 /utf-8 /permissive- /bigobj)
-    target_compile_definitions(ccbridge PRIVATE _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
-else()
-    target_compile_options(ccbridge PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+add_executable(ccbridge ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
+target_compile_definitions(ccbridge PRIVATE CCB_VERSION="${PROJECT_VERSION}")
+target_link_libraries(ccbridge PRIVATE ccb_core)
+
+enable_testing()
+add_executable(claude_channel_test EXCLUDE_FROM_ALL ${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/claude_channel_test.cpp)
+target_link_libraries(claude_channel_test PRIVATE ccb_core)
+add_test(NAME claude_channel COMMAND claude_channel_test)
+
+foreach(target ccb_core ccbridge claude_channel_test)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /utf-8 /permissive- /bigobj)
+        target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endforeach()
 
 install(TARGETS ccbridge RUNTIME DESTINATION bin)
 install(DIRECTORY templates web DESTINATION share/ccbridge)

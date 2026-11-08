@@ -52,7 +52,10 @@ jobs:
       - run: cmake --build build --config Release --parallel
       - name: Test
         if: runner.os != 'Windows'
-        run: CCBRIDGE_BIN=build/ccbridge bash tests/e2e.sh
+        run: |
+          cmake --build build --target claude_channel_test
+          ./build/claude_channel_test
+          CCBRIDGE_BIN=build/ccbridge bash tests/e2e.sh
       - name: Smoke
         run: |
           EXE=build/ccbridge; [ "$RUNNER_OS" = Windows ] && EXE=build/ccbridge.exe

@@ -25,6 +25,7 @@ ccbridge drives an unmodified interactive coding agent in a pseudo-terminal: tex
 | `web/index.html` | browser client served at `/` |
 | `third_party/libvterm/` | vendored libvterm 0.3.3 (MIT), unmodified |
 | `tests/e2e.sh`, `tests/fixtures/` | end-to-end test with a fake freebuff-kind harness |
+| `tests/unit/claude_channel_test.cpp` | target `claude_channel_test` (EXCLUDE_FROM_ALL, `ctest`): claude-jsonl reader polled across records; text stitched per message across polls |
 | `.github/workflows/ci.yml` | six-target build; e2e on Linux and macOS; release on main |
 
 ## Harnesses
@@ -36,7 +37,7 @@ A harness is a template, `templates/<name>.json`. Templates are read at run time
 | ready markers (any) | `❯`, `esc to interrupt`, `Claude Code` | `Ask Codex to do anything`, `to get started, describe a task`, `esc to interrupt` | `Enter a coding task`, `for history · ? for help`, `Starting your model session` |
 | busy marker | `esc to interrupt` | `esc to interrupt` | `Starting your model session` |
 | transcript | `~/.claude/projects/<slug(cwd)>/*.jsonl` | `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` plus `state_*.sqlite` table `threads` | `$FREEBUFF_HOME` or `~/.config/manicode`, then `projects/<basename(cwd)>/chats/<id>/chat-messages.json` |
-| record shape | `assistant`/`user` records; `message.content` blocks; text stitched by `apiBlockIndex` within `message.id` | `response_item` payloads: `message` (assistant and user text), `reasoning` (summary), `function_call`, `function_call_output`; `session_meta.payload.cwd` selects the session | JSON array of `{variant: user or ai, blocks: [{type, content, textType?}], isComplete?, userError?}` |
+| record shape | `assistant`/`user` records; `message.content` blocks; text stitched by `apiBlockIndex` within `message.id`, accumulated across polls and emitted as deltas of the stitched text | `response_item` payloads: `message` (assistant and user text), `reasoning` (summary), `function_call`, `function_call_output`; `session_meta.payload.cwd` selects the session | JSON array of `{variant: user or ai, blocks: [{type, content, textType?}], isComplete?, userError?}` |
 | turn end | `system` record with `subtype: turn_duration` | `event_msg` with `payload.type: task_complete` | `isComplete`; a `userError` is sent as a result first; a notice line on the screen (`Not enough hours`, `Choose another model`, `not available on this connection`) also ends the turn |
 | resume | `--resume <id>` | `resume <id>` | `--continue <id>` |
 | continue | `--continue` | `resume --last` | `--continue` |
@@ -93,6 +94,8 @@ cmake --build build
 ./build/ccbridge capture --harness freebuff --seq '["hi"]' --out runs/fb.raw --dump-markers
 ./build/ccbridge analyze runs/fb.raw --view text --tail 40
 ./build/ccbridge templates --check
+cmake --build build --target claude_channel_test && ./build/claude_channel_test
+CCBRIDGE_BIN=build/ccbridge bash tests/e2e.sh
 ```
 
 Adding an agent that uses an existing transcript kind needs only a new `templates/<name>.json` (fields in `templates/README.md`); no rebuild. A new transcript format needs a kind in `src/harness/kinds/`, registered in `src/harness/transcript.cpp`.
