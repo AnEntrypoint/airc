@@ -38,7 +38,7 @@ target_link_libraries(ccbridge PRIVATE
     Threads::Threads)
 
 if(MSVC)
-    target_compile_options(ccbridge PRIVATE /W4 /utf-8 /permissive-)
+    target_compile_options(ccbridge PRIVATE /W4 /utf-8 /permissive- /bigobj)
     target_compile_definitions(ccbridge PRIVATE _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0A00)
 else()
     target_compile_options(ccbridge PRIVATE -Wall -Wextra -Wpedantic)

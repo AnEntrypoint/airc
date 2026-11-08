@@ -2,7 +2,7 @@
   "argv": [
     "sh",
     "-c",
-    "echo 'Enter a coding task'; n=0; d=\"$HOME/.config/manicode/projects/$(basename \"$PWD\")/chats/e2e-chat\"; mkdir -p \"$d\"; body=''; while IFS= read -r line; do n=$((n+1)); [ -z \"$body\" ] || body=\"$body,\"; body=\"$body$(printf '{\"variant\":\"user\",\"id\":\"u%s\",\"content\":\"%s\"},{\"variant\":\"ai\",\"id\":\"a%s\",\"blocks\":[{\"type\":\"text\",\"content\":\"ECHO: %s\"}],\"isComplete\":true}' \"$n\" \"$line\" \"$n\" \"$line\")\"; printf '[%s]' \"$body\" > \"$d.tmp\"; mv \"$d.tmp\" \"$d/chat-messages.json\"; done"
+    "echo 'Enter a coding task'; n=0; d=\"$HOME/.config/manicode/projects/$(basename \"$PWD\")/chats/e2e-chat\"; mkdir -p \"$d\"; body=''; while IFS= read -r line; do line=$(printf '%s' \"$line\" | tr -d '\\033' | sed 's/\\[20[01]~//g'); n=$((n+1)); [ -z \"$body\" ] || body=\"$body,\"; body=\"$body$(printf '{\"variant\":\"user\",\"id\":\"u%s\",\"content\":\"%s\"},{\"variant\":\"ai\",\"id\":\"a%s\",\"blocks\":[{\"type\":\"text\",\"content\":\"ECHO: %s\"}],\"isComplete\":true}' \"$n\" \"$line\" \"$n\" \"$line\")\"; printf '[%s]' \"$body\" > \"$d.tmp\"; mv \"$d.tmp\" \"$d/chat-messages.json\"; done"
   ],
   "ready": [
     "Enter a coding task"
