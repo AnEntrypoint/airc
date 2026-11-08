@@ -3,6 +3,8 @@ __pycache__/
 .probe/
 runs/
 .ccbridge/
+build/
+dist/
 .env
 .env.local
 .agentplug/
@@ -72,3 +74,4 @@ core.*
 .gm/prd-references-gate.json
 .gm/browser-*/
 crates/**/.gm/
+.playwriter/

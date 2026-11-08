@@ -1,0 +1,98 @@
+name: ci
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  pull_request:
+  workflow_dispatch:
+env:
+  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-bincache
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: linux-x64, os: ubuntu-24.04, triplet: x64-linux}
+          - {target: linux-arm64, os: ubuntu-24.04-arm, triplet: arm64-linux}
+          - {target: macos-arm64, os: macos-15, triplet: arm64-osx}
+          - {target: macos-x64, os: macos-15-intel, triplet: x64-osx}
+          - {target: windows-x64, os: windows-2025, triplet: x64-windows, arch: x64}
+          - {target: windows-arm64, os: windows-11-arm, triplet: arm64-windows, arch: ARM64}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/get-cmake@v4.4.5
+      - name: Install ninja (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Install ninja (macos)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - run: mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE" && git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+      - uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: ${{ github.workspace }}/vcpkg
+      - uses: actions/cache@v4
+        with:
+          path: vcpkg-bincache
+          key: vcpkg-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.triplet }}-
+      - name: Configure
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then GEN="-A ${{ matrix.arch }}"; else GEN="-G Ninja -DCMAKE_BUILD_TYPE=Release"; fi
+          cmake -S . -B build $GEN \
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE="${{ github.workspace }}/build"
+      - run: cmake --build build --config Release --parallel
+      - name: Test
+        if: runner.os != 'Windows'
+        run: CCBRIDGE_BIN=build/ccbridge bash tests/e2e.sh
+      - name: Smoke
+        run: |
+          EXE=build/ccbridge; [ "$RUNNER_OS" = Windows ] && EXE=build/ccbridge.exe
+          "$EXE" --version
+          "$EXE" --templates templates templates --check
+      - name: Stage and archive
+        run: |
+          D=dist/ccbridge-${{ matrix.target }}
+          mkdir -p "$D/bin" "$D/share/ccbridge"
+          cp build/ccbridge build/ccbridge.exe build/*.dll "$D/bin/" 2>/dev/null || true
+          cp -r templates web "$D/share/ccbridge/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            powershell -NoProfile -Command "Compress-Archive -Path 'dist/ccbridge-${{ matrix.target }}' -DestinationPath 'dist/ccbridge-${{ matrix.target }}.zip'"
+          else
+            tar -czf "$D.tar.gz" -C dist "ccbridge-${{ matrix.target }}"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccbridge-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: ccbridge-*
+          merge-multiple: true
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -oE 'project\(ccbridge VERSION [0-9.]+' CMakeLists.txt | grep -oE '[0-9.]+$')
+          TAG="v$VER.${{ github.run_number }}"
+          gh release create "$TAG" dist/*.tar.gz dist/*.zip --target "$GITHUB_SHA" --latest --title "ccbridge $TAG" --generate-notes
