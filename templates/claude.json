@@ -1,0 +1,16 @@
+{
+  "default": true,
+  "argv": ["claude"],
+  "argv_env": [
+    {"env": "AIRC_CLAUDE_SKIP_PERMISSIONS", "equals": "1", "append": ["--dangerously-skip-permissions"]},
+    {"env": "AIRC_CLAUDE_MODEL", "append": ["--model", "$VALUE"]}
+  ],
+  "env_strip": ["CLAUDECODE", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_PID", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_EFFORT"],
+  "ready": ["❯", "esc to interrupt", "Claude Code"],
+  "busy": ["esc to interrupt"],
+  "transcript": {"kind": "claude-jsonl", "root": "{home}/.claude/projects"},
+  "resume": ["--resume", "{session}"],
+  "continue": ["--continue"],
+  "fork": ["--resume", "{session}", "--fork-session"],
+  "fork_continue": ["--continue", "--fork-session"]
+}

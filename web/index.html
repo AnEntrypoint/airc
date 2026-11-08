@@ -1,0 +1,32 @@
+<!doctype html><meta charset="utf-8">
+<title>ccbridge</title>
+<style>
+ body{font:13px/1.45 ui-monospace,Menlo,monospace;background:#111;color:#ddd;margin:0;height:100vh;display:flex;flex-direction:column}
+ #out{flex:1;overflow:auto;white-space:pre-wrap;padding:10px;margin:0}
+ #in{display:flex;border-top:1px solid #333}
+ #t{flex:1;background:#1a1a1a;color:#eee;border:0;padding:10px;font:inherit}
+ button{background:#2a2a2a;color:#ddd;border:0;padding:0 16px;font:inherit}
+</style>
+<pre id="out"></pre>
+<form id="in"><input id="t" placeholder="type a prompt, Enter to send" autocomplete="off"><button>send</button></form>
+<script>
+ var out=document.getElementById('out'), t=document.getElementById('t');
+ var q = new URLSearchParams(location.search);
+ var name = q.get('session') || 'web';
+ var harness = q.get('harness') || 'claude';
+ var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+ var ws = new WebSocket(proto + '://' + location.host + '/ws?session=' + name + '&harness=' + harness);
+ ws.onmessage = function(e){
+   if (e.data === '') { out.textContent += '\n\u2014 turn done \u2014\n'; }
+   else { out.textContent += e.data; }
+   out.scrollTop = out.scrollHeight;
+ };
+ ws.onopen = function(){ out.textContent += '[connected: session=' + name + ' harness=' + harness + ']\n'; };
+ ws.onclose = function(){ out.textContent += '[disconnected]\n'; };
+ document.getElementById('in').onsubmit = function(ev){
+   ev.preventDefault();
+   if (!t.value) return;
+   out.textContent += '\n> ' + t.value + '\n';
+   ws.send(t.value); t.value=''; out.scrollTop = out.scrollHeight;
+ };
+</script>

@@ -1,0 +1,10 @@
+{
+  "name": "ccbridge",
+  "version": "0.1.0",
+  "dependencies": [
+    "boost-beast",
+    "nlohmann-json",
+    "cli11",
+    "sqlite3"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "argv": ["freebuff"],
+  "submit_delay": 0.15,
+  "ready": ["Enter a coding task", "for history · ? for help", "Starting your model session"],
+  "busy": ["Starting your model session"],
+  "transcript": {"kind": "freebuff-json", "root": "{home}/.config/manicode", "root_env": "FREEBUFF_HOME", "notices": ["Not enough hours", "Choose another model", "not available on this connection"]},
+  "resume": ["--continue", "{session}"],
+  "continue": ["--continue"]
+}

@@ -1,0 +1,10 @@
+{
+  "argv": ["codex"],
+  "ready": ["Ask Codex to do anything", "to get started, describe a task", "esc to interrupt"],
+  "busy": ["esc to interrupt"],
+  "transcript": {"kind": "codex-jsonl", "root": "{home}/.codex", "root_env": "CODEX_HOME"},
+  "resume": ["resume", "{session}"],
+  "continue": ["resume", "--last"],
+  "fork": ["fork", "{session}"],
+  "fork_continue": ["fork", "--last"]
+}
